@@ -1,0 +1,168 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "App user profile and stats",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "active": { "type": "boolean" },
+        "blocked": { "type": "boolean" },
+        "usageTime": { "type": "number" },
+        "trophies": { "type": "number" },
+        "streak": { "type": "number" },
+        "totalActivities": { "type": "number" },
+        "totalDistance": { "type": "number" },
+        "totalTime": { "type": "number" },
+        "runCount": { "type": "number" },
+        "walkCount": { "type": "number" },
+        "weeklyStats": {
+          "type": "object",
+          "properties": {
+            "3km": { "type": "number" },
+            "5km": { "type": "number" },
+            "10km": { "type": "number" }
+          }
+        },
+        "completedEvents": { "type": "array", "items": { "type": "string" } },
+        "inventory": { "type": "array", "items": { "type": "string" } },
+        "activeBoosters": { "type": "array", "items": { "type": "object" } },
+        "customization": {
+          "type": "object",
+          "properties": {
+            "nameColor": { "type": "string" },
+            "nameStyle": { "type": "string" },
+            "hasGlow": { "type": "boolean" },
+            "frame": { "type": "string" },
+            "phrase": { "type": "string" },
+            "phraseColor": { "type": "string" },
+            "frameExpiresAt": { "type": "string" },
+            "phraseExpiresAt": { "type": "string" }
+          }
+        },
+        "profilePhoto": { "type": "string" },
+        "lastActiveDate": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["username", "email", "password", "role"]
+    },
+    "Training": {
+      "title": "Training",
+      "description": "Training session record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "type": { "type": "string" },
+        "distance": { "type": "number" },
+        "duration": { "type": "number" },
+        "calories": { "type": "number" },
+        "pace": { "type": "number" },
+        "date": { "type": "string" }
+      }
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Global announcement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "warning", "success"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "FitnessEvent": {
+      "title": "FitnessEvent",
+      "description": "Special event or challenge",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "distance": { "type": "number" },
+        "trophies": { "type": "number" },
+        "active": { "type": "boolean" },
+        "useCheckpoints": { "type": "boolean" },
+        "checkpointInterval": { "type": "number" },
+        "checkpointTrophies": { "type": "number" },
+        "rewardFrame": { "type": "string" },
+        "rewardPhrase": { "type": "string" },
+        "rewardPhraseColor": { "type": "string" },
+        "rewardDuration": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "WeeklyWinners": {
+      "title": "WeeklyWinners",
+      "description": "Weekly ranking winners",
+      "type": "object",
+      "properties": {
+        "3km": { "type": "string" },
+        "5km": { "type": "string" },
+        "10km": { "type": "string" },
+        "weekId": { "type": "string" }
+      }
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Social feed post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "photo": { "type": "string" },
+        "caption": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" },
+        "comments": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Social friend request",
+      "type": "object",
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{username}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/trainings/{trainingId}": {
+      "schema": "Training",
+      "description": "Training records"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Global announcements"
+    },
+    "/events/{eventId}": {
+      "schema": "FitnessEvent",
+      "description": "Special events"
+    },
+    "/weeklyWinners/current": {
+      "schema": "WeeklyWinners",
+      "description": "Current weekly winners"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Social feed posts"
+    },
+    "/friendRequests/{requestId}": {
+      "schema": "FriendRequest",
+      "description": "Friend requests between users"
+    }
+  }
+}

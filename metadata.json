@@ -1,6 +1,6 @@
 {
-  "name": "FitTrack Pro",
-  "description": "A comprehensive fitness tracking app with user management, training logs, and performance analytics.",
-  "requestFramePermissions": [],
+  "name": "DS Training",
+  "description": "DS Training - David Silveira Team. Aplicativo completo de acompanhamento fitness, treinos e performance.",
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": []
 }

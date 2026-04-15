@@ -9,6 +9,33 @@ export interface UserCustomization {
   phraseColor?: string;
   phraseExpiresAt?: string;
   frameExpiresAt?: string;
+  weeklyBadge?: string;
+  weeklyBadgeExpiresAt?: string;
+}
+
+export interface FriendRequest {
+  from: string;
+  to: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+export interface PostComment {
+  id: string;
+  username: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface Post {
+  id: string;
+  username: string;
+  photo: string;
+  caption: string;
+  createdAt: string;
+  expiresAt: string;
+  comments: PostComment[];
+  likes: string[];
 }
 
 export interface User {
@@ -42,6 +69,12 @@ export interface User {
   }[];
   customization: UserCustomization;
   createdAt: string;
+  // Social & Premium
+  premiumUntil?: string;
+  premiumSince?: string;
+  followers: string[];
+  following: string[];
+  friends: string[];
 }
 
 export type TrainingType = 'Corrida' | 'Caminhada' | 'Muay Thai' | 'Boxe' | 'Jiu Jitsu' | 'Bicicleta (Academia)' | 'Pedal na Rua';
@@ -95,6 +128,8 @@ export interface AppState {
     '10km': string | null;
     weekId: string;
   };
+  posts: Post[];
+  friendRequests: FriendRequest[];
 }
 
 export interface AppNotification {

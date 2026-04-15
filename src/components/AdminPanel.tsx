@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   XCircle,
   Sparkles,
-  Type
+  Type,
+  Crown,
+  Gift
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User, AppState, Announcement, FitnessEvent, UserCustomization } from '../types';
@@ -24,14 +26,25 @@ import { SHOP_ITEMS, getFrameStyle, getPhraseStyle } from '../constants';
 interface AdminPanelProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
+  onAddTrophies: (username: string, amount: number, message?: string) => void;
+  onGrantPremium: (username: string, days: number) => void;
 }
 
-export default function AdminPanel({ state, setState }: AdminPanelProps) {
+export default function AdminPanel({ state, setState, onAddTrophies, onGrantPremium }: AdminPanelProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'announcements' | 'events' | 'sync'>('users');
   const [awardAllAmount, setAwardAllAmount] = useState<string>('');
   const [awardAllMessage, setAwardAllMessage] = useState<string>('');
   const [showAwardAllConfirm, setShowAwardAllConfirm] = useState(false);
+  const [premiumDays, setPremiumDays] = useState<string>('30');
+  const [bonusAmount, setBonusAmount] = useState<string>('50');
+  const [bonusMessage, setBonusMessage] = useState<string>('');
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const showFeedback = (msg: string) => {
+    setFeedback(msg);
+    setTimeout(() => setFeedback(null), 3000);
+  };
 
   // User Actions
   const toggleBlock = (username: string) => {
@@ -40,6 +53,18 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
       ...prev,
       users: prev.users.map(u => u.username === username ? { ...u, blocked: !u.blocked } : u)
     }));
+    const user = state.users.find(u => u.username === username);
+    showFeedback(user?.blocked ? `Você liberou o usuário ${username}` : `Você bloqueou o usuário ${username}`);
+  };
+
+  const toggleActive = (username: string) => {
+    if (!state.syncActive) return;
+    setState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.username === username ? { ...u, active: !u.active } : u)
+    }));
+    const user = state.users.find(u => u.username === username);
+    showFeedback(user?.active ? `Você desativou o usuário ${username}` : `Você liberou o usuário ${username}`);
   };
 
   const updateCustomization = (username: string, customization: Partial<UserCustomization>) => {
@@ -76,6 +101,7 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
       
       return newState;
     });
+    showFeedback(`Você adicionou ${amount} troféus ao usuário ${username}`);
   };
 
   const awardAll = (amount: number, message?: string) => {
@@ -101,6 +127,7 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
       
       return newState;
     });
+    showFeedback(`Você enviou ${amount} troféus para todos os usuários`);
   };
 
   // Announcement Actions
@@ -136,34 +163,45 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-12 max-w-full overflow-hidden">
+      {/* Feedback Toast */}
+      {feedback && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-green-500 text-white px-6 py-3 rounded-2xl shadow-xl font-bold text-sm flex items-center gap-2 border border-white/20"
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          {feedback}
+        </motion.div>
+      )}
+
       {/* Admin Header */}
-      <div className="flex items-center justify-between bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          <SubTabButton active={activeSubTab === 'users'} onClick={() => setActiveSubTab('users')} icon={<Users className="w-4 h-4" />} label="Usuários" />
-          <SubTabButton active={activeSubTab === 'announcements'} onClick={() => setActiveSubTab('announcements')} icon={<Megaphone className="w-4 h-4" />} label="Avisos" />
-          <SubTabButton active={activeSubTab === 'events'} onClick={() => setActiveSubTab('events')} icon={<Calendar className="w-4 h-4" />} label="Eventos" />
-          <SubTabButton active={activeSubTab === 'sync'} onClick={() => setActiveSubTab('sync')} icon={<RefreshCw className="w-4 h-4" />} label="Sinc" />
+      <div className="flex flex-col sm:flex-row items-center gap-3 bg-zinc-900 p-3 rounded-2xl border border-zinc-800">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar w-full sm:w-auto pb-1 sm:pb-0">
+          <SubTabButton active={activeSubTab === 'users'} onClick={() => setActiveSubTab('users')} icon={<Users className="w-3.5 h-3.5" />} label="Usuários" />
+          <SubTabButton active={activeSubTab === 'announcements'} onClick={() => setActiveSubTab('announcements')} icon={<Megaphone className="w-3.5 h-3.5" />} label="Avisos" />
+          <SubTabButton active={activeSubTab === 'events'} onClick={() => setActiveSubTab('events')} icon={<Calendar className="w-3.5 h-3.5" />} label="Eventos" />
+          <SubTabButton active={activeSubTab === 'sync'} onClick={() => setActiveSubTab('sync')} icon={<RefreshCw className="w-3.5 h-3.5" />} label="Sinc" />
         </div>
-        <div className="flex gap-2 items-center">
-          <div className="flex flex-col gap-1">
-            <input 
-              type="number" 
-              value={awardAllAmount}
-              onChange={(e) => setAwardAllAmount(e.target.value)}
-              placeholder="Qtd" 
-              className="w-16 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs font-bold"
-            />
-          </div>
+        <div className="flex gap-2 items-center w-full sm:w-auto sm:ml-auto">
+          <input 
+            type="number" 
+            value={awardAllAmount}
+            onChange={(e) => setAwardAllAmount(e.target.value)}
+            placeholder="Qtd" 
+            className="w-14 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs font-bold"
+          />
           <button 
             onClick={() => {
               if (awardAllAmount && !isNaN(parseInt(awardAllAmount))) {
                 setShowAwardAllConfirm(true);
               }
             }}
-            className="px-3 py-2 bg-yellow-500/10 text-yellow-500 rounded-xl text-[10px] font-bold border border-yellow-500/20 flex items-center gap-1"
+            className="flex-1 sm:flex-none px-3 py-1.5 bg-yellow-500/10 text-yellow-500 rounded-xl text-[10px] font-bold border border-yellow-500/20 flex items-center justify-center gap-1 whitespace-nowrap"
           >
-            <Trophy className="w-3 h-3" /> Enviar para Todos
+            <Trophy className="w-3 h-3" /> Enviar Geral
           </button>
         </div>
       </div>
@@ -246,6 +284,7 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
                       filter: user.customization.nameStyle === 'neon' ? 'brightness(1.5)' : 'none'
                     }}>
                       {user.username}
+                      {isPremium(user) && <Crown className="w-3 h-3 text-orange-500 fill-orange-500/20" />}
                       <span className="text-[10px] text-zinc-500 font-normal">#{index + 1}</span>
                     </p>
                     <p className="text-[10px] text-zinc-500">{user.email}</p>
@@ -254,19 +293,44 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
+                  <button 
+                    onClick={() => toggleActive(user.username)}
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      user.active ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+                    )}
+                    title={user.active ? "Desativar Usuário" : "Liberar Usuário"}
+                  >
+                    {user.active ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  </button>
                   <button 
                     onClick={() => toggleBlock(user.username)}
                     className={cn(
                       "p-2 rounded-lg transition-all",
                       user.blocked ? "bg-red-500 text-white" : "bg-zinc-800 text-zinc-400 hover:text-red-400"
                     )}
+                    title={user.blocked ? "Desbloquear" : "Bloquear"}
                   >
                     {user.blocked ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
                   </button>
                   <button 
                     onClick={() => setSelectedUser(selectedUser?.username === user.username ? null : user)}
-                    className="p-2 bg-zinc-800 text-zinc-400 rounded-lg hover:text-orange-500"
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      isPremium(user) ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "bg-zinc-800 text-zinc-400 hover:text-orange-500"
+                    )}
+                    title="Gerenciar Premium"
+                  >
+                    <Crown className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setSelectedUser(selectedUser?.username === user.username ? null : user)}
+                    className={cn(
+                      "p-2 rounded-lg transition-all",
+                      selectedUser?.username === user.username ? "bg-zinc-100 text-zinc-900" : "bg-zinc-800 text-zinc-400 hover:text-white"
+                    )}
+                    title="Customização"
                   >
                     <Palette className="w-4 h-4" />
                   </button>
@@ -388,6 +452,114 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
                     </div>
                   </div>
 
+                  <div className="pt-4 border-t border-zinc-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[10px] font-bold uppercase text-zinc-500 tracking-widest">Gestão Premium & Social</h4>
+                      {isPremium(user) && (
+                        <span className="text-[9px] font-black text-orange-500 uppercase bg-orange-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Crown className="w-2 h-2" /> Ativo até {new Date(user.premiumUntil!).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Premium Section */}
+                      <div className="bg-zinc-800/30 p-3 rounded-xl border border-zinc-800/50 space-y-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Crown className="w-3 h-3 text-orange-500" />
+                          <span className="text-[10px] font-bold uppercase text-zinc-400">Premium</span>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-1">
+                            {[1, 7, 30, 60].map(d => (
+                              <button
+                                key={d}
+                                onClick={() => setPremiumDays(d.toString())}
+                                className={cn(
+                                  "flex-1 py-1 rounded-md text-[9px] font-bold transition-all",
+                                  premiumDays === d.toString() ? "bg-orange-500 text-white" : "bg-zinc-900 text-zinc-500 hover:text-zinc-300"
+                                )}
+                              >
+                                {d}d
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <input 
+                              type="number" 
+                              value={premiumDays}
+                              onChange={(e) => setPremiumDays(e.target.value)}
+                              placeholder="Dias"
+                              className="w-16 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs"
+                            />
+                            <button 
+                              onClick={() => {
+                                const days = parseInt(premiumDays);
+                                if (days > 0) {
+                                  onGrantPremium(user.username, days);
+                                  showFeedback(`Premium liberado para o usuário ${user.username} por ${days} dias`);
+                                }
+                              }}
+                              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-[10px] font-bold uppercase py-1.5 transition-colors"
+                            >
+                              Liberar
+                            </button>
+                            {isPremium(user) && (
+                              <button 
+                                onClick={() => {
+                                  onGrantPremium(user.username, 0);
+                                  showFeedback(`Premium removido para o usuário ${user.username}`);
+                                }}
+                                className="px-3 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-[10px] font-bold uppercase py-1.5 transition-colors"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+ 
+                      {/* Bonus Section */}
+                      <div className="bg-zinc-800/30 p-3 rounded-xl border border-zinc-800/50 space-y-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Gift className="w-3 h-3 text-yellow-500" />
+                          <span className="text-[10px] font-bold uppercase text-zinc-400">Troféus</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input 
+                            type="number" 
+                            value={bonusAmount}
+                            onChange={(e) => setBonusAmount(e.target.value)}
+                            placeholder="Qtd"
+                            className="w-16 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs"
+                          />
+                          <button 
+                            onClick={() => {
+                              onAddTrophies(user.username, parseInt(bonusAmount), bonusMessage);
+                              showFeedback(`Você adicionou ${bonusAmount} troféus ao usuário ${user.username}`);
+                              setBonusAmount('50');
+                              setBonusMessage('');
+                            }}
+                            className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg text-[10px] font-bold uppercase py-1.5 transition-colors"
+                          >
+                            Confirmar Envio
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <input 
+                        type="text"
+                        value={bonusMessage}
+                        onChange={(e) => setBonusMessage(e.target.value)}
+                        placeholder="Mensagem do bônus (opcional)..."
+                        className="w-full bg-zinc-800/30 border border-zinc-800/50 rounded-xl p-2.5 text-xs pl-9 focus:border-zinc-700 outline-none transition-colors"
+                      />
+                      <Megaphone className="w-3.5 h-3.5 text-zinc-600 absolute left-3 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+
                   <div className="pt-2 flex items-center justify-between border-t border-zinc-800">
                     <div className="flex items-center gap-2">
                       <Trophy className="w-4 h-4 text-yellow-500" />
@@ -407,36 +579,40 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
 
       {activeSubTab === 'announcements' && (
         <div className="space-y-6">
-          <div className="bg-zinc-900 p-6 rounded-3xl border border-zinc-800 space-y-4">
-            <h3 className="text-sm font-bold flex items-center gap-2">
-              <Megaphone className="w-4 h-4 text-orange-500" />
-              Novo Informativo
-            </h3>
-            <textarea 
-              id="announcement-msg"
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-4 text-sm focus:ring-2 focus:ring-orange-500/50 outline-none h-24"
-              placeholder="Escreva o aviso para todos os usuários..."
-            />
-            <div className="flex gap-2">
-              <select id="announcement-duration" className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 text-xs flex-1">
-                <option value="1">1 Hora</option>
-                <option value="6">6 Horas</option>
-                <option value="24">24 Horas</option>
-                <option value="168">1 Semana</option>
-              </select>
-              <button 
-                onClick={() => {
-                  const msg = (document.getElementById('announcement-msg') as HTMLTextAreaElement).value;
-                  const dur = parseInt((document.getElementById('announcement-duration') as HTMLSelectElement).value);
-                  if (msg) {
-                    addAnnouncement(msg, dur);
-                    (document.getElementById('announcement-msg') as HTMLTextAreaElement).value = '';
-                  }
-                }}
-                className="bg-orange-500 text-white px-6 py-2 rounded-lg text-xs font-bold hover:bg-orange-600 transition-all"
-              >
-                Enviar Aviso
-              </button>
+          <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-orange-500" />
+                Novo Informativo
+              </h3>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <textarea 
+                id="announcement-msg"
+                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs focus:ring-2 focus:ring-orange-500/50 outline-none h-20 resize-none"
+                placeholder="Escreva o aviso para todos os usuários..."
+              />
+              <div className="flex flex-row sm:flex-col gap-2 w-full sm:w-40">
+                <select id="announcement-duration" className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[10px] flex-1">
+                  <option value="1">1 Hora</option>
+                  <option value="6">6 Horas</option>
+                  <option value="24">24 Horas</option>
+                  <option value="168">1 Semana</option>
+                </select>
+                <button 
+                  onClick={() => {
+                    const msg = (document.getElementById('announcement-msg') as HTMLTextAreaElement).value;
+                    const dur = parseInt((document.getElementById('announcement-duration') as HTMLSelectElement).value);
+                    if (msg) {
+                      addAnnouncement(msg, dur);
+                      (document.getElementById('announcement-msg') as HTMLTextAreaElement).value = '';
+                    }
+                  }}
+                  className="bg-orange-500 text-white px-4 py-2 rounded-lg text-[10px] font-bold hover:bg-orange-600 transition-all flex-1"
+                >
+                  Enviar
+                </button>
+              </div>
             </div>
           </div>
 
@@ -462,92 +638,92 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
 
       {activeSubTab === 'events' && (
         <div className="space-y-6">
-          <div className="bg-zinc-900 p-6 rounded-3xl border border-zinc-800 space-y-4">
-            <h3 className="text-sm font-bold flex items-center gap-2">
+          <div className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 space-y-4">
+            <h3 className="text-xs font-bold flex items-center gap-2">
               <Calendar className="w-4 h-4 text-orange-500" />
-              Criar Evento Personalizado
+              Criar Evento
             </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Nome do Evento</label>
-                <input id="event-name" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Ex: Desafio 10km Neon" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Tipo</label>
-                <select id="event-type" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
-                  <option value="Corrida">Corrida</option>
-                  <option value="Caminhada">Caminhada</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Distância (KM)</label>
-                <input id="event-km" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Ex: 5" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Troféus Finais</label>
-                <input id="event-trophies" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Ex: 20" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Checkpoints</label>
-                <select id="event-use-checkpoints" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
-                  <option value="false">Desativado</option>
-                  <option value="true">Ativado</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Intervalo (Metros)</label>
-                <input id="event-checkpoint-interval" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Ex: 500" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Troféus Checkpoint</label>
-                <input id="event-checkpoint-trophies" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Ex: 1" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Moldura Prêmio</label>
-                <select id="event-reward-frame" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
-                  <option value="none">Nenhuma</option>
-                  <optgroup label="Molduras Especiais (Exclusivas)">
-                    {SHOP_ITEMS.filter(i => i.isSpecial).map(item => (
-                      <option key={item.id} value={item.frameValue}>{item.name}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Molduras da Loja">
-                    {SHOP_ITEMS.filter(i => i.type === 'frame' && !i.isSpecial).map(item => (
-                      <option key={item.id} value={item.frameValue}>{item.name}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Legado">
-                    <option value="neon">Neon Laranja</option>
-                    <option value="arcs-2">2 Arcos Azuis</option>
-                    <option value="arcs-3">3 Arcos Roxos</option>
-                    <option value="special">Especial Dourado</option>
-                  </optgroup>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Duração Prêmio (Dias)</label>
-                <input id="event-reward-duration" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Vazio para Permanente" />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <label className="text-[10px] font-bold uppercase text-zinc-500 ml-1">Frase Prêmio & Cor</label>
-                <div className="flex gap-2">
-                  <input id="event-reward-phrase" className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Ex: Desafio completo! Você superou seus limites!" />
-                  <select id="event-reward-phrase-color" className="w-32 bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-[10px]">
-                    <option value="">Padrão</option>
-                    <option value="#f97316">Neon Laranja</option>
-                    <option value="#3b82f6">Neon Azul</option>
-                    <option value="#a855f7">Neon Roxo</option>
-                    <option value="#22c55e">Neon Verde</option>
-                    <option value="#ec4899">Neon Rosa</option>
-                    <option value="#f97316,#ef4444">Fogo</option>
-                    <option value="#3b82f6,#06b6d4">Oceano</option>
-                    <option value="#a855f7,#ec4899">Cyber</option>
-                    <option value="#a855f7,#3b82f6,#ec4899">Elite</option>
-                    <option value="#eab308,#ef4444,#eab308">Campeão</option>
+            
+            <div className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Nome</label>
+                  <input id="event-name" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Ex: Desafio 10km" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Tipo</label>
+                  <select id="event-type" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
+                    <option value="Corrida">Corrida</option>
+                    <option value="Caminhada">Caminhada</option>
                   </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">KM</label>
+                  <input id="event-km" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="5" />
+                </div>
+              </div>
+
+              {/* Checkpoints */}
+              <div className="grid grid-cols-3 gap-3 bg-zinc-800/30 p-3 rounded-xl border border-zinc-800/50">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Checkpoints</label>
+                  <select id="event-use-checkpoints" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-xs">
+                    <option value="false">Não</option>
+                    <option value="true">Sim</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Int. (m)</label>
+                  <input id="event-checkpoint-interval" type="number" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="500" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Troféus</label>
+                  <input id="event-checkpoint-trophies" type="number" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="1" />
+                </div>
+              </div>
+
+              {/* Rewards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Troféus Finais</label>
+                  <input id="event-trophies" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="20" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Moldura Prêmio</label>
+                  <select id="event-reward-frame" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs">
+                    <option value="none">Nenhuma</option>
+                    <optgroup label="Especiais">
+                      {SHOP_ITEMS.filter(i => i.isSpecial).map(item => (
+                        <option key={item.id} value={item.frameValue}>{item.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Loja">
+                      {SHOP_ITEMS.filter(i => i.type === 'frame' && !i.isSpecial).map(item => (
+                        <option key={item.id} value={item.frameValue}>{item.name}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+                <div className="space-y-1 col-span-2 sm:col-span-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Duração (Dias)</label>
+                  <input id="event-reward-duration" type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Permanente" />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-[9px] font-bold uppercase text-zinc-500 ml-1">Frase Prêmio</label>
+                  <div className="flex gap-2">
+                    <input id="event-reward-phrase" className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs" placeholder="Parabéns!" />
+                    <select id="event-reward-phrase-color" className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-[10px]">
+                      <option value="">Padrão</option>
+                      <option value="#f97316">Neon</option>
+                      <option value="#f97316,#ef4444">Fogo</option>
+                      <option value="#a855f7,#3b82f6,#ec4899">Elite</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
+
             <button 
               onClick={() => {
                 const name = (document.getElementById('event-name') as HTMLInputElement).value;
@@ -582,7 +758,7 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
                   });
                 }
               }}
-              className="w-full bg-orange-500 text-white py-3 rounded-xl text-xs font-bold hover:bg-orange-600 transition-all"
+              className="w-full bg-orange-500 text-white py-2.5 rounded-xl text-[10px] font-bold hover:bg-orange-600 transition-all"
             >
               Lançar Evento
             </button>
@@ -653,6 +829,11 @@ export default function AdminPanel({ state, setState }: AdminPanelProps) {
       )}
     </div>
   );
+}
+
+function isPremium(user: User | null) {
+  if (!user?.premiumUntil) return false;
+  return new Date(user.premiumUntil) > new Date();
 }
 
 function SubTabButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {

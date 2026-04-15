@@ -1,0 +1,139 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: username
+// Fields:
+//   - username: string (required)
+//   - email: string (required)
+//   - password: string (required)
+//   - role: string (required, 'user' or 'admin')
+//   - active: boolean
+//   - blocked: boolean
+//   - usageTime: number
+//   - trophies: number
+//   - streak: number
+//   - totalActivities: number
+//   - totalDistance: number
+//   - totalTime: number
+//   - runCount: number
+//   - walkCount: number
+//   - weeklyStats: map { '3km': number, '5km': number, '10km': number }
+//   - completedEvents: list of strings
+//   - inventory: list of strings
+//   - activeBoosters: list of objects
+//   - customization: map { nameColor, nameStyle, hasGlow, frame, phrase, phraseColor, frameExpiresAt, phraseExpiresAt }
+//   - profilePhoto: string
+//   - lastActiveDate: string
+//   - createdAt: string
+//
+// Collection: trainings
+// Document ID: auto-generated
+// Fields:
+//   - id: string
+//   - username: string
+//   - type: string
+//   - distance: number
+//   - duration: number
+//   - calories: number
+//   - pace: number
+//   - date: string
+//
+// Collection: announcements
+// Document ID: auto-generated
+//
+// Collection: events
+// Document ID: auto-generated
+//
+// Collection: weeklyWinners
+// Document ID: 'current'
+//
+// Collection: posts
+// Document ID: auto-generated
+// Fields:
+//   - id: string
+//   - username: string
+//   - photo: string
+//   - caption: string
+//   - createdAt: string
+//   - expiresAt: string
+//   - comments: list of objects { id, username, content, createdAt }
+//   - likes: list of strings (usernames)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         request.auth.token.email == "gamerbarba55@gmail.com");
+    }
+
+    function isOwner(username) {
+      return isAuthenticated() && (request.auth.uid == username || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username == username);
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['username', 'email', 'password', 'role']) &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['user', 'admin'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{username} {
+      allow read: if true;
+      allow create: if true; // Allow registration
+      allow update: if true; // App handles its own logic for now
+      allow delete: if isAdmin();
+    }
+
+    match /trainings/{trainingId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /weeklyWinners/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true; // Owners delete their own posts in app logic
+    }
+
+    match /friendRequests/{requestId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+  }
+}
