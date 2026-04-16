@@ -20,8 +20,11 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User, AppState, Announcement, FitnessEvent, UserCustomization } from '../types';
-import { cn, formatDuration } from '../lib/utils';
+import { cn, formatDuration, isPremium } from '../lib/utils';
 import { SHOP_ITEMS, getFrameStyle, getPhraseStyle } from '../constants';
+import { storage } from '../lib/storage';
+import UserAvatar from './UserAvatar';
+import UserName from './UserName';
 
 interface AdminPanelProps {
   state: AppState;
@@ -47,91 +50,158 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
   };
 
   // User Actions
-  const toggleBlock = (username: string) => {
-    if (!state.syncActive) return;
-    setState(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.username === username ? { ...u, blocked: !u.blocked } : u)
-    }));
+  const toggleBlock = async (username: string) => {
     const user = state.users.find(u => u.username === username);
-    showFeedback(user?.blocked ? `Você liberou o usuário ${username}` : `Você bloqueou o usuário ${username}`);
-  };
-
-  const toggleActive = (username: string) => {
-    if (!state.syncActive) return;
-    setState(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.username === username ? { ...u, active: !u.active } : u)
-    }));
-    const user = state.users.find(u => u.username === username);
-    showFeedback(user?.active ? `Você desativou o usuário ${username}` : `Você liberou o usuário ${username}`);
-  };
-
-  const updateCustomization = (username: string, customization: Partial<UserCustomization>) => {
-    if (!state.syncActive) return;
-    setState(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.username === username ? { 
-        ...u, 
-        customization: { ...u.customization, ...customization } 
-      } : u)
-    }));
-  };
-
-  const addTrophies = (username: string, amount: number) => {
-    if (!state.syncActive) return;
+    if (!user) return;
+    
+    const updatedUser = { ...user, blocked: !user.blocked };
+    
     setState(prev => {
-      const notification = {
-        id: Math.random().toString(36).substr(2, 9),
-        message: `O administrador enviou ${amount} troféus para você!`,
-        type: 'bonus' as const,
-        amount,
-        createdAt: new Date().toISOString()
-      };
-      
       const newState = {
         ...prev,
-        users: prev.users.map(u => u.username === username ? { ...u, trophies: u.trophies + amount } : u),
+        users: prev.users.map(u => u.username === username ? updatedUser : u)
+      };
+      if (prev.currentUser?.username === username) {
+        newState.currentUser = updatedUser;
+      }
+      return newState;
+    });
+    
+    if (state.syncActive) {
+      await storage.pushUser(updatedUser);
+    }
+    showFeedback(updatedUser.blocked ? `Você bloqueou o usuário ${username}` : `Você liberou o usuário ${username}`);
+  };
+
+  const toggleActive = async (username: string) => {
+    const user = state.users.find(u => u.username === username);
+    if (!user) return;
+
+    const updatedUser = { ...user, active: !user.active };
+
+    setState(prev => {
+      const newState = {
+        ...prev,
+        users: prev.users.map(u => u.username === username ? updatedUser : u)
+      };
+      if (prev.currentUser?.username === username) {
+        newState.currentUser = updatedUser;
+      }
+      return newState;
+    });
+
+    if (state.syncActive) {
+      await storage.pushUser(updatedUser);
+    }
+    showFeedback(updatedUser.active ? `Você liberou o usuário ${username}` : `Você desativou o usuário ${username}`);
+  };
+
+  const updateCustomization = async (username: string, customization: Partial<UserCustomization>) => {
+    const user = state.users.find(u => u.username === username);
+    if (!user) return;
+
+    const updatedUser = { 
+      ...user, 
+      customization: { ...user.customization, ...customization } 
+    };
+
+    setState(prev => {
+      const newState = {
+        ...prev,
+        users: prev.users.map(u => u.username === username ? updatedUser : u)
+      };
+      if (prev.currentUser?.username === username) {
+        newState.currentUser = updatedUser;
+      }
+      return newState;
+    });
+
+    if (state.syncActive) {
+      await storage.pushUser(updatedUser);
+    }
+  };
+
+  const addTrophies = async (username: string, amount: number) => {
+    const user = state.users.find(u => u.username === username);
+    if (!user) return;
+
+    const updatedUser = { ...user, trophies: user.trophies + amount };
+
+    const notification = {
+      id: Math.random().toString(36).substr(2, 9),
+      message: `O administrador enviou ${amount} troféus para você!`,
+      type: 'bonus' as const,
+      amount,
+      createdAt: new Date().toISOString()
+    };
+    
+    setState(prev => {
+      const newState = {
+        ...prev,
+        users: prev.users.map(u => u.username === username ? updatedUser : u),
         notifications: [notification, ...prev.notifications].slice(0, 50)
       };
       
       if (newState.currentUser?.username === username) {
-        newState.currentUser.trophies += amount;
+        newState.currentUser = updatedUser;
       }
       
       return newState;
     });
+
+    if (state.syncActive) {
+      await storage.pushUser(updatedUser);
+    }
     showFeedback(`Você adicionou ${amount} troféus ao usuário ${username}`);
   };
 
-  const awardAll = (amount: number, message?: string) => {
-    if (!state.syncActive) return;
+  const awardAll = async (amount: number, message?: string) => {
+    
+    const notification = {
+      id: Math.random().toString(36).substr(2, 9),
+      message: message || `O administrador enviou ${amount} troféus para TODOS!`,
+      type: 'bonus' as const,
+      amount,
+      createdAt: new Date().toISOString()
+    };
+    
+    const updatedUsers = state.users.map(u => ({ ...u, trophies: u.trophies + amount }));
+    
     setState(prev => {
-      const notification = {
-        id: Math.random().toString(36).substr(2, 9),
-        message: message || `O administrador enviou ${amount} troféus para TODOS!`,
-        type: 'bonus' as const,
-        amount,
-        createdAt: new Date().toISOString()
-      };
-      
       const newState = {
         ...prev,
-        users: prev.users.map(u => ({ ...u, trophies: u.trophies + amount })),
+        users: updatedUsers,
         notifications: [notification, ...prev.notifications].slice(0, 50)
       };
       
       if (newState.currentUser) {
-        newState.currentUser.trophies += amount;
+        const updatedMe = updatedUsers.find(u => u.username === newState.currentUser?.username);
+        if (updatedMe) newState.currentUser = updatedMe;
       }
       
       return newState;
     });
+
+    // Global sync via batch
+    if (state.syncActive) {
+      try {
+        const { writeBatch, doc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        const batch = writeBatch(db);
+        updatedUsers.forEach(u => {
+          batch.set(doc(db, 'users', u.username), u);
+        });
+        await batch.commit();
+      } catch (e) {
+        console.error('Error in awardAll sync:', e);
+      }
+    }
+    
     showFeedback(`Você enviou ${amount} troféus para todos os usuários`);
   };
 
   // Announcement Actions
-  const addAnnouncement = (message: string, durationHours: number) => {
+  const addAnnouncement = async (message: string, durationHours: number) => {
     if (!state.syncActive) return;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + durationHours * 60 * 60 * 1000);
@@ -146,10 +216,30 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
       ...prev,
       announcements: [...prev.announcements, newAnnouncement]
     }));
+
+    // Sync to Firestore
+    try {
+      const { setDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      await setDoc(doc(db, 'announcements', newAnnouncement.id), newAnnouncement);
+    } catch (e) {
+      console.error('Error adding announcement:', e);
+    }
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    setState(prev => ({ ...prev, announcements: prev.announcements.filter(a => a.id !== id) }));
+    try {
+      const { deleteDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      await deleteDoc(doc(db, 'announcements', id));
+    } catch (e) {
+      console.error('Error deleting announcement:', e);
+    }
   };
 
   // Event Actions
-  const addEvent = (event: Omit<FitnessEvent, 'id' | 'active'>) => {
+  const addEvent = async (event: Omit<FitnessEvent, 'id' | 'active'>) => {
     if (!state.syncActive) return;
     const newEvent: FitnessEvent = {
       ...event,
@@ -160,6 +250,26 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
       ...prev,
       events: [...prev.events, newEvent]
     }));
+
+    // Sync to Firestore
+    try {
+      const { setDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      await setDoc(doc(db, 'events', newEvent.id), newEvent);
+    } catch (e) {
+      console.error('Error adding event:', e);
+    }
+  };
+
+  const deleteEvent = async (id: string) => {
+    setState(prev => ({ ...prev, events: prev.events.filter(e => e.id !== id) }));
+    try {
+      const { deleteDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      await deleteDoc(doc(db, 'events', id));
+    } catch (e) {
+      console.error('Error deleting event:', e);
+    }
   };
 
   return (
@@ -264,29 +374,10 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
             <div key={user.username} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
               <div className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center border-2 overflow-hidden relative",
-                      user.customization.frame === 'none' ? "border-zinc-800" : ""
-                    )} style={getFrameStyle(user.customization.frame)}>
-                      <div className="absolute inset-0 rounded-xl border-inherit" />
-                      {user.profilePhoto ? (
-                        <img src={user.profilePhoto} className="w-full h-full object-cover rounded-lg" alt="" />
-                      ) : (
-                        <Users className="w-6 h-6 text-zinc-700" />
-                      )}
-                    </div>
-                  </div>
+                  <UserAvatar user={user} size="md" />
                   <div>
-                    <p className="font-bold flex items-center gap-2" style={{ 
-                      color: user.customization.nameColor,
-                      textShadow: user.customization.hasGlow ? `0 0 10px ${user.customization.nameColor}` : 'none',
-                      filter: user.customization.nameStyle === 'neon' ? 'brightness(1.5)' : 'none'
-                    }}>
-                      {user.username}
-                      {isPremium(user) && <Crown className="w-3 h-3 text-orange-500 fill-orange-500/20" />}
-                      <span className="text-[10px] text-zinc-500 font-normal">#{index + 1}</span>
-                    </p>
+                    <UserName user={user} className="text-sm" />
+                    <p className="text-[10px] text-zinc-500 font-normal">#{index + 1}</p>
                     <p className="text-[10px] text-zinc-500">{user.email}</p>
                     <p className="text-[10px] italic" style={getPhraseStyle(user.customization.phraseColor)}>
                       "{user.customization.phrase}"
@@ -625,7 +716,7 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
                   <p className="text-[10px] text-zinc-500">Expira em: {new Date(ann.expiresAt).toLocaleString()}</p>
                 </div>
                 <button 
-                  onClick={() => setState(prev => ({ ...prev, announcements: prev.announcements.filter(a => a.id !== ann.id) }))}
+                  onClick={() => deleteAnnouncement(ann.id)}
                   className="text-zinc-600 hover:text-red-400 p-1"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -774,7 +865,7 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
                   {ev.useCheckpoints && <p className="text-[9px] text-orange-500/70 font-bold uppercase">Checkpoints: +{ev.checkpointTrophies} a cada {ev.checkpointInterval}m</p>}
                 </div>
                 <button 
-                  onClick={() => setState(prev => ({ ...prev, events: prev.events.filter(e => e.id !== ev.id) }))}
+                  onClick={() => deleteEvent(ev.id)}
                   className="text-zinc-600 hover:text-red-400"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -817,6 +908,28 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
             </button>
           </div>
 
+          <div className="bg-zinc-900 p-6 rounded-3xl border border-zinc-800 space-y-4">
+             <div className="flex items-center gap-3">
+               <div className="p-2 bg-orange-500/10 rounded-lg">
+                 <RefreshCw className="w-4 h-4 text-orange-500" />
+               </div>
+               <h4 className="text-sm font-bold">Resgate de Dados</h4>
+             </div>
+             <p className="text-[10px] text-zinc-500 leading-relaxed">
+               Se usuários cadastrados não estiverem aparecendo após reiniciar, use este botão para forçar o backup de toda a lista local para a nuvem.
+             </p>
+             <button 
+               onClick={async () => {
+                 const success = await storage.syncAllUsers(state.users);
+                 if (success) showFeedback("Todos os usuários foram sincronizados!");
+                 else showFeedback("Erro na sincronização global.");
+               }}
+               className="w-full py-3 bg-orange-500/5 text-orange-500 border border-orange-500/20 rounded-xl text-xs font-bold hover:bg-orange-500 hover:text-white transition-all"
+             >
+               Forçar Sincronização de Todos os Usuários
+             </button>
+          </div>
+
           <div className="bg-zinc-900/30 border border-zinc-800 p-4 rounded-2xl">
             <h4 className="text-[10px] font-bold uppercase text-zinc-500 mb-3">Histórico de Ações</h4>
             <div className="space-y-2">
@@ -829,11 +942,6 @@ export default function AdminPanel({ state, setState, onAddTrophies, onGrantPrem
       )}
     </div>
   );
-}
-
-function isPremium(user: User | null) {
-  if (!user?.premiumUntil) return false;
-  return new Date(user.premiumUntil) > new Date();
 }
 
 function SubTabButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {

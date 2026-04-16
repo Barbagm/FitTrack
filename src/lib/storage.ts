@@ -328,18 +328,27 @@ export const storage = {
   syncWithFirestore: (onUpdate: (state: AppState) => void) => {
     // Listen for users
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const users: User[] = [];
-      snapshot.forEach(doc => users.push(doc.data() as User));
+      const remoteUsers: User[] = [];
+      snapshot.forEach(doc => remoteUsers.push(doc.data() as User));
       
+      const currentState = storage.load();
+      
+      // Merge: Keep all remote users, and add any local users that are not in remote yet
+      // This prevents newly registered users from disappearing during the sync race condition
+      const mergedUsers = [...remoteUsers];
+      currentState.users.forEach(localUser => {
+        if (!mergedUsers.find(u => u.username === localUser.username)) {
+          mergedUsers.push(localUser);
+        }
+      });
+
       // Ensure David is ALWAYS in the list and has correct credentials
-      const davidExists = users.find(u => u.username === 'David');
-      if (!davidExists) {
-        users.push(DEFAULT_STATE.users[0]);
+      const davidIdx = mergedUsers.findIndex(u => u.username === 'David');
+      if (davidIdx === -1) {
+        mergedUsers.push(DEFAULT_STATE.users[0]);
       } else {
-        // Force correct credentials for David even if he comes from Firestore
-        const davidIdx = users.findIndex(u => u.username === 'David');
-        users[davidIdx] = {
-          ...users[davidIdx],
+        mergedUsers[davidIdx] = {
+          ...mergedUsers[davidIdx],
           password: DEFAULT_STATE.users[0].password,
           role: 'admin',
           active: true,
@@ -347,12 +356,11 @@ export const storage = {
         };
       }
 
-      const currentState = storage.load();
-      const newState = { ...currentState, users };
+      const newState = { ...currentState, users: mergedUsers };
       
       // Update current user if exists
       if (currentState.currentUser) {
-        const updatedMe = users.find(u => u.username === currentState.currentUser?.username);
+        const updatedMe = mergedUsers.find(u => u.username === currentState.currentUser?.username);
         if (updatedMe) newState.currentUser = updatedMe;
       }
       
@@ -459,7 +467,29 @@ export const storage = {
         await setDoc(doc(db, 'users', state.currentUser.username), state.currentUser);
       }
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, state.currentUser ? `users/${state.currentUser.username}` : 'users');
+      console.error('Error in pushToFirestore:', e);
+    }
+  },
+
+  syncAllUsers: async (users: User[]) => {
+    try {
+      const batch = writeBatch(db);
+      users.forEach(u => {
+        batch.set(doc(db, 'users', u.username), u);
+      });
+      await batch.commit();
+      return true;
+    } catch (e) {
+      console.error('Error in syncAllUsers:', e);
+      return false;
+    }
+  },
+
+  pushUser: async (user: User) => {
+    try {
+      await setDoc(doc(db, 'users', user.username), user);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `users/${user.username}`);
     }
   },
 

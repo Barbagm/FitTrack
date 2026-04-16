@@ -28,3 +28,8 @@ export function formatPace(pace: number): string {
   const secs = Math.round((pace - mins) * 60);
   return `${mins}:${secs.toString().padStart(2, '0')} min/km`;
 }
+
+export const isPremium = (user: any | null) => {
+  if (!user?.premiumUntil) return false;
+  return new Date(user.premiumUntil) > new Date();
+};

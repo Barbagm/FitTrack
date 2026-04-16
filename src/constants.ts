@@ -62,35 +62,35 @@ export const SHOP_ITEMS: ShopItem[] = [
 ];
 
 export const getFrameStyle = (frame: string | undefined) => {
-  if (!frame || frame === 'none') return {};
+  if (!frame || frame === 'none') return { borderColor: '#3f3f46' }; // zinc-700
 
   // Special Frames
   if (frame.startsWith('special-')) {
     const id = parseInt(frame.split('-').pop() || '1');
     const specialStyles = [
-      { colors: ['#a855f7', '#3b82f6', '#ec4899'], shadow: '0 0 20px #a855f7, 0 0 40px #3b82f6' }, // Purple Blue Pink
-      { colors: ['#eab308', '#ef4444', '#eab308'], shadow: '0 0 25px #eab308, 0 0 50px #ef4444' }, // Gold Red Gold
-      { colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0000ff', '#8800ff'], shadow: '0 0 30px rgba(255,255,255,0.5)' }, // Rainbow
-      { colors: ['#00ffff', '#ffffff', '#00ffff'], shadow: '0 0 20px #00ffff, inset 0 0 10px #ffffff' }, // Ice
-      { colors: ['#ff00ff', '#000000', '#ff00ff'], shadow: '0 0 20px #ff00ff' }, // Void Neon
-      { colors: ['#00ff00', '#ffff00', '#00ff00'], shadow: '0 0 20px #00ff00, 0 0 40px #ffff00' }, // Toxic
-      { colors: ['#ffffff', '#999999', '#ffffff'], shadow: '0 0 20px #ffffff' }, // Silver
-      { colors: ['#ff4400', '#ffcc00', '#ff4400'], shadow: '0 0 20px #ff4400, 0 0 40px #ffcc00' }, // Fire
-      { colors: ['#4444ff', '#00ffff', '#4444ff'], shadow: '0 0 20px #4444ff, 0 0 40px #00ffff' }, // Deep Sea
-      { colors: ['#ff0055', '#5500ff', '#00ff55'], shadow: '0 0 25px #ff0055, 0 0 50px #5500ff' }  // Cyber
+      { colors: ['#a855f7', '#3b82f6', '#ec4899'], shadow: '0 0 15px #a855f7, 0 0 30px #3b82f6' }, // Purple Blue Pink
+      { colors: ['#eab308', '#ef4444', '#eab308'], shadow: '0 0 20px #eab308, 0 0 40px #ef4444' }, // Gold Red Gold
+      { colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0000ff', '#8800ff'], shadow: '0 0 25px rgba(255,255,255,0.5)' }, // Rainbow
+      { colors: ['#00ffff', '#ffffff', '#00ffff'], shadow: '0 0 15px #00ffff, inset 0 0 10px #ffffff' }, // Ice
+      { colors: ['#ff00ff', '#000000', '#ff00ff'], shadow: '0 0 15px #ff00ff' }, // Void Neon
+      { colors: ['#00ff00', '#ffff00', '#00ff00'], shadow: '0 0 15px #00ff00, 0 0 30px #ffff00' }, // Toxic
+      { colors: ['#ffffff', '#999999', '#ffffff'], shadow: '0 0 15px #ffffff' }, // Silver
+      { colors: ['#ff4400', '#ffcc00', '#ff4400'], shadow: '0 0 15px #ff4400, 0 0 30px #ffcc00' }, // Fire
+      { colors: ['#4444ff', '#00ffff', '#4444ff'], shadow: '0 0 15px #4444ff, 0 0 30px #00ffff' }, // Deep Sea
+      { colors: ['#ff0055', '#5500ff', '#00ff55'], shadow: '0 0 20px #ff0055, 0 0 40px #5500ff' }  // Cyber
     ];
     const style = specialStyles[(id - 1) % specialStyles.length];
     return {
-      borderImage: `linear-gradient(45deg, ${style.colors.join(', ')}) 1`,
-      boxShadow: style.shadow,
+      borderColor: style.colors[0],
+      boxShadow: `inset 0 0 0 2px ${style.colors[0]}, ${style.shadow}`,
       animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
     };
   }
 
   // Legacy frames
   if (frame === 'neon') return { borderColor: '#f97316', boxShadow: '0 0 15px rgba(249,115,22,0.4)' };
-  if (frame === 'arcs-2') return { borderColor: '#3b82f6' };
-  if (frame === 'arcs-3') return { borderColor: '#a855f7' };
+  if (frame === 'arcs-2') return { borderColor: '#3b82f6', boxShadow: '0 0 10px rgba(59,130,246,0.3)' };
+  if (frame === 'arcs-3') return { borderColor: '#a855f7', boxShadow: '0 0 10px rgba(168,85,247,0.3)' };
   if (frame === 'special') return { borderColor: '#eab308', boxShadow: '0 0 15px rgba(234,179,8,0.3)' };
 
   // New Shop Frames
@@ -107,8 +107,8 @@ export const getFrameStyle = (frame: string | undefined) => {
     ];
     const [c1, c2] = colors[(id - 1) % colors.length];
     return {
-      borderImage: `linear-gradient(45deg, ${c1}, ${c2}) 1`,
-      boxShadow: `0 0 10px ${c1}, 0 0 20px ${c2}`
+      borderColor: c1,
+      boxShadow: `inset 0 0 0 2px ${c1}, 0 0 10px ${c1}, 0 0 20px ${c2}`
     };
   }
 
@@ -128,8 +128,8 @@ export const getFrameStyle = (frame: string | undefined) => {
     ];
     const [c1, c2, c3] = colors[(id - 1) % colors.length];
     return {
-      borderImage: `linear-gradient(45deg, ${c1}, ${c2}, ${c3}) 1`,
-      boxShadow: `0 0 10px ${c1}, 0 0 20px ${c2}, 0 0 30px ${c3}`
+      borderColor: c1,
+      boxShadow: `inset 0 0 0 2px ${c1}, 0 0 10px ${c1}, 0 0 20px ${c2}, 0 0 30px ${c3}`
     };
   }
 
@@ -142,10 +142,10 @@ export const getFrameStyle = (frame: string | undefined) => {
       '#1e293b', '#451a03'
     ];
     const color = colors[(id - 1) % colors.length];
-    return { borderColor: color };
+    return { borderColor: color, boxShadow: `inset 0 0 0 2px ${color}` };
   }
 
-  return {};
+  return { borderColor: '#3f3f46' };
 };
 
 export const getPhraseStyle = (color: string | undefined) => {

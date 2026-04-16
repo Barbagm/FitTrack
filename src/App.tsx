@@ -47,11 +47,13 @@ import {
 } from 'recharts';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn, formatDuration, calculatePace, formatPace } from './lib/utils';
+import { cn, formatDuration, calculatePace, formatPace, isPremium } from './lib/utils';
 import { storage } from './lib/storage';
 import { User, Training, AppState, UserCustomization, TrainingType, Post, PostComment, FriendRequest } from './types';
 import AdminPanel from './components/AdminPanel';
 import AnnouncementPopup from './components/AnnouncementPopup';
+import UserAvatar from './components/UserAvatar';
+import UserName from './components/UserName';
 import { FitnessEvent, Announcement } from './types';
 import { SHOP_ITEMS, getFrameStyle, getPhraseStyle, ShopItem } from './constants';
 import { db } from './firebase';
@@ -144,23 +146,38 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  // Initial persistent training state helper
+  const getInitialTraining = () => {
+    const saved = localStorage.getItem('fittrack_active_training');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const initialTS = getInitialTraining();
+
   // Training State
-  const [isTraining, setIsTraining] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [trainingType, setTrainingType] = useState<TrainingType>('Corrida');
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [accumulatedTime, setAccumulatedTime] = useState(0);
-  const [distance, setDistance] = useState(0);
-  const [paceHistory, setPaceHistory] = useState<{ time: number, pace: number }[]>([]);
+  const [isTraining, setIsTraining] = useState(!!initialTS?.isTraining);
+  const [isPaused, setIsPaused] = useState(!!initialTS?.isPaused);
+  const [trainingType, setTrainingType] = useState<TrainingType>(initialTS?.trainingType || 'Corrida');
+  const [elapsedSeconds, setElapsedSeconds] = useState(initialTS?.elapsedSeconds || 0);
+  const [accumulatedTime, setAccumulatedTime] = useState(initialTS?.accumulatedTime || 0);
+  const [distance, setDistance] = useState(initialTS?.distance || 0);
+  const [paceHistory, setPaceHistory] = useState<{ time: number, pace: number }[]>(initialTS?.paceHistory || []);
   const [showStartConfirm, setShowStartConfirm] = useState(false);
   const [showPurchaseConfirm, setShowPurchaseConfirm] = useState(false);
   const [pendingPurchaseItem, setPendingPurchaseItem] = useState<ShopItem | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showGoalSelection, setShowGoalSelection] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState<3 | 5 | 10 | null>(null);
-  const [activeEventId, setActiveEventId] = useState<string | null>(null);
-  const [checkpointTrophiesEarned, setCheckpointTrophiesEarned] = useState(0);
+  const [selectedGoal, setSelectedGoal] = useState<3 | 5 | 10 | null>(initialTS?.selectedGoal || null);
+  const [activeEventId, setActiveEventId] = useState<string | null>(initialTS?.activeEventId || null);
+  const [checkpointTrophiesEarned, setCheckpointTrophiesEarned] = useState(initialTS?.checkpointTrophiesEarned || 0);
   const [selectedProfile, setSelectedProfile] = useState<User | null>(null);
   const [premiumTab, setPremiumTab] = useState<'feed' | 'friends' | 'ranking'>('feed');
   const [newPostCaption, setNewPostCaption] = useState('');
@@ -170,14 +187,19 @@ export default function App() {
   const [newComment, setNewComment] = useState('');
   const [showPostConfirm, setShowPostConfirm] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [lastCheckpointDistance, setLastCheckpointDistance] = useState(0);
+  const [lastCheckpointDistance, setLastCheckpointDistance] = useState(initialTS?.lastCheckpointDistance || 0);
   const [lastTraining, setLastTraining] = useState<Training | null>(null);
-  const [startTime, setStartTime] = useState<number | null>(null);
+  const [startTime, setStartTime] = useState<number | null>(initialTS?.startTime || null);
 
-  const isPremium = (user: User | null) => {
-    if (!user?.premiumUntil) return false;
-    return new Date(user.premiumUntil) > new Date();
-  };
+  // Recover timer on mount if it should be running
+  useEffect(() => {
+    if (isTraining && !isPaused && startTime) {
+      const now = Date.now();
+      const currentElapsed = Math.floor((now - startTime) / 1000) + accumulatedTime;
+      setElapsedSeconds(currentElapsed);
+      startTimer(startTime, accumulatedTime);
+    }
+  }, []);
 
   // Persist Training State
   useEffect(() => {
@@ -197,39 +219,10 @@ export default function App() {
         lastCheckpointDistance
       };
       localStorage.setItem('fittrack_active_training', JSON.stringify(trainingState));
-    } else {
-      localStorage.removeItem('fittrack_active_training');
     }
+    // We intentionally don't remove here to prevent accidental data loss. 
+    // It's removed only in executeStopTraining.
   }, [isTraining, isPaused, trainingType, elapsedSeconds, accumulatedTime, distance, paceHistory, startTime, selectedGoal, activeEventId, checkpointTrophiesEarned, lastCheckpointDistance]);
-
-  // Load Training State
-  useEffect(() => {
-    const saved = localStorage.getItem('fittrack_active_training');
-    if (saved) {
-      try {
-        const ts = JSON.parse(saved);
-        setIsTraining(ts.isTraining);
-        setIsPaused(ts.isPaused);
-        setTrainingType(ts.trainingType);
-        setElapsedSeconds(ts.elapsedSeconds);
-        setAccumulatedTime(ts.accumulatedTime);
-        setDistance(ts.distance);
-        setPaceHistory(ts.paceHistory);
-        setStartTime(ts.startTime);
-        setSelectedGoal(ts.selectedGoal);
-        setActiveEventId(ts.activeEventId);
-        setCheckpointTrophiesEarned(ts.checkpointTrophiesEarned);
-        setLastCheckpointDistance(ts.lastCheckpointDistance);
-        
-        if (ts.isTraining && !ts.isPaused) {
-          // Resume interval if it was running
-          startTimer(ts.startTime, ts.accumulatedTime);
-        }
-      } catch (e) {
-        console.error('Error loading training state:', e);
-      }
-    }
-  }, []);
 
   // Sync with Firestore on mount
   useEffect(() => {
@@ -424,7 +417,7 @@ export default function App() {
     };
     setState(newState);
     storage.save(newState);
-    storage.pushToFirestore(newState);
+    storage.pushUser(newUser);
     setView('home');
     setActiveTab('home');
     setError('');
@@ -492,7 +485,8 @@ export default function App() {
     setIsPaused(true);
     const now = Date.now();
     if (startTime) {
-      setAccumulatedTime(prev => prev + Math.floor((now - startTime) / 1000));
+      const addedTime = Math.floor((now - startTime) / 1000);
+      setAccumulatedTime(prev => prev + addedTime);
     }
     setStartTime(null);
   };
@@ -501,8 +495,21 @@ export default function App() {
     const now = Date.now();
     setIsPaused(false);
     setStartTime(now);
-    startTimer(now, accumulatedTime);
+    // Use latest accumulated time from state by using the startTimer logic
+    // startTimer will calculate correctly if we pass the current state
   };
+
+  // Sync Timer logic refined to avoid stale closures
+  useEffect(() => {
+    if (isTraining && !isPaused && startTime) {
+      startTimer(startTime, accumulatedTime);
+    } else {
+      if (trainingInterval.current) clearInterval(trainingInterval.current);
+    }
+    return () => {
+      if (trainingInterval.current) clearInterval(trainingInterval.current);
+    }
+  }, [isTraining, isPaused, startTime, accumulatedTime]);
 
   // Checkpoint effect
   useEffect(() => {
@@ -527,10 +534,20 @@ export default function App() {
     }
   }, [elapsedSeconds, isTraining, distance, trainingType]);
 
-  // Sync timer when returning to app
+  // Sync timer when returning to app (Screen off / Background fix)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isTraining && !isPaused && startTime) {
+        const now = Date.now();
+        const diffSeconds = Math.floor((now - startTime) / 1000) + accumulatedTime;
+        setElapsedSeconds(diffSeconds);
+        // Restart timer just in case browser throttled it
+        startTimer(startTime, accumulatedTime);
+      }
+    };
+
+    const handleFocus = () => {
+      if (isTraining && !isPaused && startTime) {
         const now = Date.now();
         const diffSeconds = Math.floor((now - startTime) / 1000) + accumulatedTime;
         setElapsedSeconds(diffSeconds);
@@ -538,7 +555,11 @@ export default function App() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [isTraining, isPaused, startTime, accumulatedTime]);
 
   // Expiry check for temporary rewards
@@ -804,7 +825,10 @@ export default function App() {
           if (!prev.currentUser) return prev;
           const updatedUser = { ...prev.currentUser, profilePhoto: base64 };
           const users = prev.users.map(u => u.username === prev.currentUser?.username ? updatedUser : u);
-          return { ...prev, currentUser: updatedUser, users };
+          const newState = { ...prev, currentUser: updatedUser, users };
+          storage.save(newState);
+          storage.pushToFirestore(newState);
+          return newState;
         });
       };
       reader.readAsDataURL(file);
@@ -1472,36 +1496,35 @@ export default function App() {
                 
                 <div className="flex items-center gap-4 relative">
                   <div className="relative group">
-                    <div className={cn(
-                      "w-20 h-20 rounded-2xl bg-zinc-800 border-2 overflow-hidden flex items-center justify-center relative",
-                      state.currentUser.customization.frame === 'none' ? "border-zinc-700" : ""
-                    )} style={getFrameStyle(state.currentUser.customization.frame)}>
-                      <div className="absolute inset-0 rounded-2xl border-inherit" />
-                      {state.currentUser.profilePhoto ? (
-                        <img src={state.currentUser.profilePhoto} alt="Profile" className="w-full h-full object-cover rounded-2xl" />
-                      ) : (
-                        <UserIcon className="w-10 h-10 text-zinc-600" />
-                      )}
-                    </div>
-                    <label className="absolute -bottom-2 -right-2 p-2 bg-orange-500 rounded-lg cursor-pointer shadow-lg hover:bg-orange-600 transition-colors">
+                    <UserAvatar 
+                      user={state.currentUser} 
+                      size="xl" 
+                    />
+                    <label className="absolute -bottom-2 -right-2 p-2 bg-orange-500 rounded-lg cursor-pointer shadow-lg hover:bg-orange-600 transition-colors z-10">
                       <Camera className="w-4 h-4 text-white" />
                       <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
                     </label>
+                    {state.currentUser.inventory?.length > 0 && (
+                      <button 
+                        onClick={() => setActiveTab('inventory')}
+                        className="absolute -top-2 -right-2 p-2 bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg hover:bg-zinc-700 transition-colors z-10"
+                        title="Trocar Moldura"
+                      >
+                        <ShoppingBag className="w-4 h-4 text-orange-500" />
+                      </button>
+                    )}
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2" style={{ 
-                      color: state.currentUser.customization.nameColor,
-                      textShadow: state.currentUser.customization.hasGlow ? `0 0 15px ${state.currentUser.customization.nameColor}` : 'none',
-                      filter: state.currentUser.customization.nameStyle === 'neon' ? 'brightness(1.5)' : 'none'
-                    }}>
-                      {state.currentUser.username}
-                      {state.currentUser.trophies > 0 && (
+                    <UserName 
+                      user={state.currentUser} 
+                      className="text-2xl" 
+                    />
+                    {state.currentUser.trophies > 0 && (
                         <div className="flex items-center gap-1 bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-full text-[10px] border border-yellow-500/20">
                           <Trophy className="w-3 h-3" />
                           {state.currentUser.trophies}
                         </div>
                       )}
-                    </h2>
                     <p className="text-zinc-500 text-sm flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       Membro desde {format(new Date(state.currentUser.createdAt), 'MMM yyyy')}
@@ -1924,19 +1947,11 @@ export default function App() {
                       
                       <div className="flex items-center gap-4">
                         <div className="relative">
-                          <button 
+                          <UserAvatar 
+                            user={user} 
+                            size="md" 
                             onClick={() => setSelectedProfile(user)}
-                            className={cn(
-                              "w-12 h-12 rounded-xl bg-zinc-800 border-2 overflow-hidden flex items-center justify-center transition-all relative",
-                              user.customization.frame === 'none' ? "border-zinc-700" : ""
-                            )} style={getFrameStyle(user.customization.frame)}>
-                            <div className="absolute inset-0 rounded-xl border-inherit" />
-                            {user.profilePhoto ? (
-                              <img src={user.profilePhoto} alt="" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
-                            ) : (
-                              <UserIcon className="w-6 h-6 text-zinc-500" />
-                            )}
-                          </button>
+                          />
                           <div className={cn(
                             "absolute -top-1 -left-4 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-zinc-900 z-10",
                             rankingCategory !== 'global' && index === 0 ? "bg-yellow-500 text-yellow-950" : 
@@ -1948,14 +1963,7 @@ export default function App() {
                           </div>
                         </div>
                         <div>
-                          <p className="font-bold text-sm flex items-center gap-2" style={{ 
-                            color: user.customization.nameColor,
-                            textShadow: user.customization.hasGlow ? `0 0 10px ${user.customization.nameColor}` : 'none',
-                            filter: user.customization.nameStyle === 'neon' ? 'brightness(1.5)' : 'none'
-                          }}>
-                            {user.username}
-                            {user.streak >= 7 && <Flame className="w-3 h-3 text-orange-500" />}
-                          </p>
+                          <UserName user={user} className="text-sm tracking-tight" />
                           {user.customization.phrase && (
                             <p className="text-[10px] italic leading-tight font-medium" style={getPhraseStyle(user.customization.phraseColor)}>"{user.customization.phrase}"</p>
                           )}
@@ -2068,9 +2076,10 @@ export default function App() {
                           isEquipped ? "border-orange-500 bg-orange-500/5" : isOwned ? "border-blue-500/50 bg-blue-500/5" : "border-zinc-800 hover:border-orange-500/50"
                         )}
                       >
-                        <div className="w-16 h-16 rounded-xl bg-zinc-800 border-2 flex items-center justify-center overflow-hidden" style={getFrameStyle(item.frameValue)}>
-                          <UserIcon className="w-8 h-8 text-zinc-700" />
-                        </div>
+                        <UserAvatar 
+                          user={{ ...state.currentUser!, customization: { ...state.currentUser!.customization, frame: item.frameValue as any } }} 
+                          size="lg" 
+                        />
                         <div className="text-center">
                           <p className="font-bold text-xs truncate w-32">{item.name}</p>
                           {isEquipped ? (
@@ -2106,9 +2115,10 @@ export default function App() {
                           isEquipped ? "border-purple-500 bg-purple-500/5" : isOwned ? "border-blue-500/50 bg-blue-500/5" : "border-zinc-800 opacity-80"
                         )}
                       >
-                        <div className="w-16 h-16 rounded-xl bg-zinc-800 border-2 flex items-center justify-center overflow-hidden" style={getFrameStyle(item.frameValue)}>
-                          <UserIcon className="w-8 h-8 text-zinc-700" />
-                        </div>
+                        <UserAvatar 
+                          user={{ ...state.currentUser!, customization: { ...state.currentUser!.customization, frame: item.frameValue as any } }} 
+                          size="lg" 
+                        />
                         <div className="text-center">
                           <p className="font-bold text-xs truncate w-32">{item.name}</p>
                           {isEquipped ? (
@@ -2193,9 +2203,10 @@ export default function App() {
                             isEquipped ? "border-orange-500 bg-orange-500/5" : "border-zinc-800 hover:border-zinc-700"
                           )}
                         >
-                          <div className="w-16 h-16 rounded-xl bg-zinc-800 border-2 flex items-center justify-center overflow-hidden" style={getFrameStyle(item.frameValue)}>
-                            <UserIcon className="w-8 h-8 text-zinc-700" />
-                          </div>
+                          <UserAvatar 
+                            user={{ ...state.currentUser!, customization: { ...state.currentUser!.customization, frame: item.frameValue as any } }} 
+                            size="lg" 
+                          />
                           <div className="text-center">
                             <p className="font-bold text-xs truncate w-32">{item.name}</p>
                             {isEquipped ? (
@@ -2274,19 +2285,17 @@ export default function App() {
                           {/* Post Header */}
                           <div className="p-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <button 
+                              <UserAvatar 
+                                user={postUser || null} 
+                                size="md" 
                                 onClick={() => setSelectedProfile(postUser || null)}
-                                className="w-10 h-10 rounded-xl bg-zinc-800 border overflow-hidden flex items-center justify-center"
-                                style={postUser ? getFrameStyle(postUser.customization.frame) : {}}
-                              >
-                                {postUser?.profilePhoto ? (
-                                  <img src={postUser.profilePhoto} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <UserIcon className="w-5 h-5 text-zinc-600" />
-                                )}
-                              </button>
+                              />
                               <div>
-                                <p className="font-bold text-sm">{post.username}</p>
+                                {postUser ? (
+                                  <UserName user={postUser} className="text-sm" />
+                                ) : (
+                                  <p className="font-bold text-sm">{post.username}</p>
+                                )}
                                 <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
                                   {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true, locale: ptBR })}
                                 </p>
@@ -2443,19 +2452,13 @@ export default function App() {
                             return (
                               <div key={friendName} className="bg-zinc-900 p-4 rounded-2xl border border-zinc-800 flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                  <button 
+                                  <UserAvatar 
+                                    user={friend} 
+                                    size="md" 
                                     onClick={() => setSelectedProfile(friend)}
-                                    className="w-12 h-12 rounded-xl bg-zinc-800 border-2 overflow-hidden flex items-center justify-center"
-                                    style={getFrameStyle(friend.customization.frame)}
-                                  >
-                                    {friend.profilePhoto ? (
-                                      <img src={friend.profilePhoto} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                      <UserIcon className="w-6 h-6 text-zinc-600" />
-                                    )}
-                                  </button>
+                                  />
                                   <div>
-                                    <p className="font-bold text-sm">{friend.username}</p>
+                                    <UserName user={friend} className="text-sm" />
                                     <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
                                       <Trophy className="w-3 h-3 text-orange-500" /> {friend.trophies}
                                       <Activity className="w-3 h-3 text-blue-500" /> {friend.totalDistance}km
@@ -2508,13 +2511,7 @@ export default function App() {
                               )}>
                                 <div className="flex items-center gap-4">
                                   <span className="text-xs font-black text-zinc-600 w-4">{idx + 1}</span>
-                                  <div className="w-10 h-10 rounded-xl bg-zinc-800 border overflow-hidden flex items-center justify-center">
-                                    {user.profilePhoto ? (
-                                      <img src={user.profilePhoto} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                      <UserIcon className="w-5 h-5 text-zinc-600" />
-                                    )}
-                                  </div>
+                                  <UserAvatar user={user} size="md" className="w-10 h-10" />
                                   <p className="font-bold text-sm">{user.username}</p>
                                 </div>
                                 <div className="flex items-center gap-1 text-orange-500">
@@ -2836,22 +2833,15 @@ export default function App() {
             </button>
 
             <div className="flex flex-col items-center text-center space-y-6">
-              <div className={cn(
-                "w-32 h-32 rounded-3xl bg-zinc-800 border-4 overflow-hidden flex items-center justify-center relative shadow-2xl shadow-orange-500/10",
-                selectedProfile.customization.frame === 'none' ? "border-zinc-700" : ""
-              )} style={getFrameStyle(selectedProfile.customization.frame)}>
-                <div className="absolute inset-0 rounded-3xl border-inherit" />
-                {selectedProfile.profilePhoto ? (
-                  <img src={selectedProfile.profilePhoto} alt="" className="w-full h-full object-cover rounded-3xl" />
-                ) : (
-                  <UserIcon className="w-16 h-16 text-zinc-600" />
-                )}
-              </div>
+              <UserAvatar user={selectedProfile} size="xl" className="w-32 h-32 rounded-3xl border-4 shadow-2xl shadow-orange-500/10" />
 
               <div className="space-y-2">
                 <h3 className="text-3xl font-black tracking-tighter" style={{ 
                   color: selectedProfile.customization.nameColor,
-                  textShadow: selectedProfile.customization.hasGlow ? `0 0 20px ${selectedProfile.customization.nameColor}` : 'none'
+                  textShadow: selectedProfile.customization.hasGlow || selectedProfile.customization.nameStyle === 'neon' 
+                    ? `0 0 20px ${selectedProfile.customization.nameColor}, 0 0 40px ${selectedProfile.customization.nameColor}44` 
+                    : 'none',
+                  filter: selectedProfile.customization.nameStyle === 'neon' ? 'brightness(1.5) contrast(1.1)' : 'none'
                 }}>
                   {selectedProfile.username}
                 </h3>
